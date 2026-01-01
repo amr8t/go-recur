@@ -1,0 +1,92 @@
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+
+  gocyclo:
+    min-complexity: 15
+
+  govet:
+    enable-all: true
+    disable:
+      - shadow
+
+  misspell:
+    locale: US
+
+  gofmt:
+    simplify: true
+
+  goimports:
+    local-prefixes: github.com/amr8t/go-recur
+
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - style
+      - performance
+    disabled-checks:
+      - unnamedResult
+      - hugeParam
+
+  revive:
+    rules:
+      - name: exported
+        arguments:
+          - disableStutteringCheck
+
+  staticcheck:
+    checks: ["all"]
+
+linters:
+  disable-all: true
+  enable:
+    - errcheck       # Check for unchecked errors
+    - gosimple       # Simplify code
+    - govet          # Reports suspicious constructs
+    - ineffassign    # Detect ineffectual assignments
+    - staticcheck    # Advanced Go linter
+    - unused         # Check for unused code
+    - gofmt          # Check formatting
+    - goimports      # Check imports
+    - misspell       # Check spelling
+    - revive         # Fast, configurable linter
+    - gocritic       # Extensible linter with many checks
+    - gocyclo        # Detect cyclomatic complexity
+    - exportloopref  # Check for loop variable issues
+    - gosec          # Security-focused linter
+    - typecheck      # Type check code
+
+issues:
+  exclude-rules:
+    # Exclude some linters from test files
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - errcheck
+        - gosec
+
+    # Exclude examples from some strict checks
+    - path: examples/
+      linters:
+        - errcheck
+        - gosec
+
+  # Maximum issues count per one linter
+  max-issues-per-linter: 0
+
+  # Maximum count of issues with the same text
+  max-same-issues: 0
+
+  # Show all issues from a linter
+  new: false
+
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+  skip-dirs:
+    - vendor
+
+output:
+  sort-results: true

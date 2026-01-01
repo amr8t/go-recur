@@ -1,0 +1,118 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Run tests
+        run: go test -v ./...
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Build examples
+        run: |
+          cd examples/simple && go build -v .
+          cd ../http && go build -v .
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get the previous tag
+          PREV_TAG=$(git tag --sort=-version:refname | grep -A1 "${{ steps.version.outputs.VERSION }}" | tail -n1)
+
+          if [ -z "$PREV_TAG" ]; then
+            # First release - get all commits
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges)
+          else
+            # Get commits since previous tag
+            CHANGELOG=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
+          fi
+
+          # Save changelog to file
+          cat > CHANGELOG.md << EOF
+          ## What's Changed
+
+          ${CHANGELOG}
+
+          ## Installation
+
+          \`\`\`bash
+          go get github.com/amr8t/go-recur@${{ steps.version.outputs.VERSION }}
+          \`\`\`
+
+          ## Documentation
+
+          See the [README](https://github.com/amr8t/go-recur#readme) for usage examples and API documentation.
+          EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.VERSION }}
+          name: Release ${{ steps.version.outputs.VERSION }}
+          body_path: CHANGELOG.md
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.VERSION, '-rc') || contains(steps.version.outputs.VERSION, '-beta') || contains(steps.version.outputs.VERSION, '-alpha') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish:
+    name: Publish to pkg.go.dev
+    runs-on: ubuntu-latest
+    needs: release
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Trigger pkg.go.dev update
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/}"
+          curl -i "https://proxy.golang.org/github.com/amr8t/go-recur/@v/${VERSION}.info" || true
+          echo "Triggered pkg.go.dev update for version ${VERSION}"
+
+  notify:
+    name: Notify Release
+    runs-on: ubuntu-latest
+    needs: [release, publish]
+
+    steps:
+      - name: Extract version
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Release notification
+        run: |
+          echo "✅ Release ${{ steps.version.outputs.VERSION }} published successfully!"
+          echo "📦 Available at: https://github.com/amr8t/go-recur/releases/tag/${{ steps.version.outputs.VERSION }}"
+          echo "📚 Documentation: https://pkg.go.dev/github.com/amr8t/go-recur@${{ steps.version.outputs.VERSION }}"
