@@ -151,13 +151,13 @@ Fix any issues reported by the linter.
 Example:
 ```go
 // MaxAttempts creates a policy that sets the maximum number of retry attempts.
-// The operation will be attempted at most 'max' times (including the initial attempt).
+// The operation will be attempted at most 'n' times (including the initial attempt).
 //
 // Example:
 //   err := recur.Do(operation).
 //       WithMaxAttempts(5).
 //       Run()
-func MaxAttempts(max int) Policy {
+func MaxAttempts(n int) Policy {
     // Implementation
 }
 ```

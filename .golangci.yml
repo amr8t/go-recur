@@ -10,6 +10,7 @@ linters-settings:
     enable-all: true
     disable:
       - shadow
+      - fieldalignment # Disable fieldalignment (cosmetic optimization)
 
   misspell:
     locale: US
@@ -41,21 +42,21 @@ linters-settings:
 linters:
   disable-all: true
   enable:
-    - errcheck       # Check for unchecked errors
-    - gosimple       # Simplify code
-    - govet          # Reports suspicious constructs
-    - ineffassign    # Detect ineffectual assignments
-    - staticcheck    # Advanced Go linter
-    - unused         # Check for unused code
-    - gofmt          # Check formatting
-    - goimports      # Check imports
-    - misspell       # Check spelling
-    - revive         # Fast, configurable linter
-    - gocritic       # Extensible linter with many checks
-    - gocyclo        # Detect cyclomatic complexity
-    - exportloopref  # Check for loop variable issues
-    - gosec          # Security-focused linter
-    - typecheck      # Type check code
+    - errcheck # Check for unchecked errors
+    - gosimple # Simplify code
+    - govet # Reports suspicious constructs
+    - ineffassign # Detect ineffectual assignments
+    - staticcheck # Advanced Go linter
+    - unused # Check for unused code
+    - gofmt # Check formatting
+    - goimports # Check imports
+    - misspell # Check spelling
+    - revive # Fast, configurable linter
+    - gocritic # Extensible linter with many checks
+    - gocyclo # Detect cyclomatic complexity
+    - copyloopvar # Check for loop variable issues (replaces exportloopref)
+    - gosec # Security-focused linter
+    - typecheck # Type check code
 
 issues:
   exclude-rules:
@@ -72,6 +73,10 @@ issues:
         - errcheck
         - gosec
 
+  # Exclude specific directories
+  exclude-dirs:
+    - vendor
+
   # Maximum issues count per one linter
   max-issues-per-linter: 0
 
@@ -85,8 +90,6 @@ run:
   timeout: 5m
   tests: true
   modules-download-mode: readonly
-  skip-dirs:
-    - vendor
 
 output:
   sort-results: true

@@ -26,9 +26,9 @@ func (b *ConstantBackoff) Next(attempt int) time.Duration {
 
 // ExponentialBackoff increases delay exponentially
 type ExponentialBackoff struct {
+	factor  float64
 	initial time.Duration
 	max     time.Duration
-	factor  float64
 }
 
 // Exponential creates a backoff that increases exponentially
@@ -42,8 +42,8 @@ func Exponential(initial time.Duration) Backoff {
 }
 
 // WithMaxDelay sets maximum delay for exponential backoff
-func (b *ExponentialBackoff) WithMaxDelay(max time.Duration) *ExponentialBackoff {
-	b.max = max
+func (b *ExponentialBackoff) WithMaxDelay(maxDelay time.Duration) *ExponentialBackoff {
+	b.max = maxDelay
 	return b
 }
 
@@ -77,8 +77,8 @@ func Fibonacci(initial time.Duration) Backoff {
 }
 
 // WithMaxDelay sets maximum delay for fibonacci backoff
-func (b *FibonacciBackoff) WithMaxDelay(max time.Duration) *FibonacciBackoff {
-	b.max = max
+func (b *FibonacciBackoff) WithMaxDelay(maxDelay time.Duration) *FibonacciBackoff {
+	b.max = maxDelay
 	return b
 }
 
@@ -120,8 +120,8 @@ func Linear(initial, increment time.Duration) Backoff {
 }
 
 // WithMaxDelay sets maximum delay for linear backoff
-func (b *LinearBackoff) WithMaxDelay(max time.Duration) *LinearBackoff {
-	b.max = max
+func (b *LinearBackoff) WithMaxDelay(maxDelay time.Duration) *LinearBackoff {
+	b.max = maxDelay
 	return b
 }
 

@@ -26,15 +26,15 @@ func Do(operation func() error) *SimpleRetrier {
 // SimpleRetrier provides a simple retry interface for any function
 type SimpleRetrier struct {
 	operation   func() error
-	maxAttempts int
 	backoff     Backoff
 	matcher     ErrorMatcher
-	timeout     time.Duration
 	hooks       []Hook
+	timeout     time.Duration
+	maxAttempts int
 }
 
-func (r *SimpleRetrier) WithMaxAttempts(max int) *SimpleRetrier {
-	r.maxAttempts = max
+func (r *SimpleRetrier) WithMaxAttempts(n int) *SimpleRetrier {
+	r.maxAttempts = n
 	return r
 }
 

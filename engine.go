@@ -95,10 +95,10 @@ func execute(ctx context.Context, operation func() error, policies []Policy, hoo
 
 // executionConfig holds the runtime configuration for retry execution
 type executionConfig struct {
-	maxAttempts int
 	backoff     Backoff
 	matcher     ErrorMatcher
 	timeout     time.Duration
+	maxAttempts int
 }
 
 // Policy is a function that modifies execution configuration
@@ -109,9 +109,9 @@ func (p Policy) apply(config *executionConfig) {
 }
 
 // MaxAttempts creates a policy that sets maximum retry attempts
-func MaxAttempts(max int) Policy {
+func MaxAttempts(n int) Policy {
 	return func(config *executionConfig) {
-		config.maxAttempts = max
+		config.maxAttempts = n
 	}
 }
 
