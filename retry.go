@@ -10,9 +10,10 @@ import (
 // All other return values are captured and returned.
 //
 // Example:
-//   result, err := recur.Do(func() (string, error) {
-//       return fetchData()
-//   }).WithMaxAttempts(3).Run()
+//
+//	result, err := recur.Do(func() (string, error) {
+//	    return fetchData()
+//	}).WithMaxAttempts(3).Run()
 func Do(operation func() error) *SimpleRetrier {
 	return &SimpleRetrier{
 		operation:   operation,
@@ -67,10 +68,10 @@ func (r *SimpleRetrier) RunContext(ctx context.Context) error {
 		WithBackoff(r.backoff),
 		OnlyRetryIf(r.matcher),
 	}
-	
+
 	if r.timeout > 0 {
 		policies = append(policies, Timeout(r.timeout))
 	}
-	
+
 	return execute(ctx, r.operation, policies, r.hooks)
 }

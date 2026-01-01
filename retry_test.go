@@ -15,7 +15,7 @@ func TestSimpleDo(t *testing.T) {
 			}
 			return nil
 		}).WithMaxAttempts(5).Run()
-		
+
 		if err != nil {
 			t.Errorf("Expected success, got: %v", err)
 		}
@@ -23,11 +23,11 @@ func TestSimpleDo(t *testing.T) {
 			t.Errorf("Expected 3 attempts, got %d", counter)
 		}
 	})
-	
+
 	t.Run("WithReturnValue", func(t *testing.T) {
 		counter := 0
 		var result string
-		
+
 		err := Do(func() error {
 			counter++
 			if counter < 2 {
@@ -36,7 +36,7 @@ func TestSimpleDo(t *testing.T) {
 			result = "success"
 			return nil
 		}).WithMaxAttempts(3).Run()
-		
+
 		if err != nil {
 			t.Errorf("Expected success, got: %v", err)
 		}
@@ -44,17 +44,17 @@ func TestSimpleDo(t *testing.T) {
 			t.Errorf("Expected 'success', got '%s'", result)
 		}
 	})
-	
+
 	t.Run("AnyArgs", func(t *testing.T) {
 		// User captures their own variables
 		a, b := 10, 20
 		var result int
-		
+
 		err := Do(func() error {
 			result = a + b
 			return nil
 		}).Run()
-		
+
 		if err != nil {
 			t.Errorf("Expected success, got: %v", err)
 		}
