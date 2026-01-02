@@ -218,7 +218,7 @@ func (s *iteratorState) shouldRetryLastAttempt() bool {
 	return s.builder.matcher(s.lastAttempt.result)
 }
 
-// isContextDone checks if context is cancelled
+// isContextDone checks if context is canceled
 func (s *iteratorState) isContextDone() bool {
 	select {
 	case <-s.ctx.Done():
