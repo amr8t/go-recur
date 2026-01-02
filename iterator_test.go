@@ -335,3 +335,89 @@ func TestBackoff_Linear(t *testing.T) {
 		t.Errorf("Expected 250ms, got %v", delays[2])
 	}
 }
+
+func TestIterator_AutoStopOnSuccess(t *testing.T) {
+	counter := 0
+	var lastErr error
+
+	for attempt := range Iter().WithMaxAttempts(5).Seq() {
+		counter++
+
+		// Simulate operation that succeeds on attempt 2
+		if counter < 2 {
+			lastErr = ErrTemporary
+		} else {
+			lastErr = nil
+		}
+
+		attempt.Result(lastErr)
+		// No manual break needed - iterator should stop automatically on success
+	}
+
+	// Should stop after attempt 2 (first success)
+	if counter != 2 {
+		t.Errorf("Expected 2 attempts (stopped on success), got %d", counter)
+	}
+}
+
+func TestIterator_AutoStopOnNonRetryableError(t *testing.T) {
+	counter := 0
+
+	for attempt := range Iter().
+		WithMaxAttempts(5).
+		RetryIf(MatchErrors(ErrTemporary)).
+		Seq() {
+		counter++
+
+		// First attempt: temporary error (retryable)
+		// Second attempt: fatal error (non-retryable)
+		var err error
+		if counter == 1 {
+			err = ErrTemporary
+		} else {
+			err = ErrFatal
+		}
+
+		attempt.Result(err)
+		// Iterator should automatically stop on non-retryable error
+	}
+
+	// Should stop after attempt 2 (first non-retryable error)
+	if counter != 2 {
+		t.Errorf("Expected 2 attempts (stopped on non-retryable error), got %d", counter)
+	}
+}
+
+func TestIterator_ResultWithMetrics(t *testing.T) {
+	builder := Iter().
+		WithMaxAttempts(5).
+		WithMetrics("auto_stop_test")
+
+	counter := 0
+	for attempt := range builder.Seq() {
+		counter++
+
+		// Succeed on attempt 3
+		var err error
+		if counter < 3 {
+			err = ErrTemporary
+		}
+
+		attempt.Result(err)
+	}
+
+	if counter != 3 {
+		t.Errorf("Expected 3 attempts, got %d", counter)
+	}
+
+	metrics := builder.Metrics()
+	if metrics.TotalAttempts.Load() != 1 {
+		t.Errorf("Expected 1 total operation, got %d", metrics.TotalAttempts.Load())
+	}
+	if metrics.SuccessCount.Load() != 1 {
+		t.Errorf("Expected 1 success, got %d", metrics.SuccessCount.Load())
+	}
+	if metrics.TotalRetries.Load() != 2 {
+		t.Errorf("Expected 2 retries, got %d", metrics.TotalRetries.Load())
+	}
+}

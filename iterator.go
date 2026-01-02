@@ -38,8 +38,11 @@ func (m *MetricsCollector) Name() string {
 	return m.name
 }
 
-// Result tells the iterator about the operation result
-// Call this after your operation to enable automatic retry control
+// Result tells the iterator about the operation result.
+// The iterator will automatically stop on the next iteration if:
+// - err is nil (success)
+// - err is non-retryable (doesn't match the error matcher)
+// - max attempts have been reached
 func (a *Attempt) Result(err error) {
 	a.result = err
 	a.resultSet = true
@@ -186,7 +189,7 @@ type iteratorState struct {
 func (s *iteratorState) checkContinue(attempt int) bool {
 	// Check if previous attempt had non-retryable error
 	if !s.shouldRetryLastAttempt() {
-		s.recordFailureMetrics()
+		s.recordStopMetrics()
 		return false
 	}
 
@@ -213,7 +216,7 @@ func (s *iteratorState) shouldRetryLastAttempt() bool {
 		return true
 	}
 	if s.lastAttempt.result == nil {
-		return true
+		return false // Success - don't retry
 	}
 	return s.builder.matcher(s.lastAttempt.result)
 }
@@ -269,6 +272,27 @@ func (s *iteratorState) waitForBackoff(att *Attempt) bool {
 func (s *iteratorState) recordFailureMetrics() {
 	if s.builder.metrics != nil && s.operationStarted {
 		s.builder.metrics.TotalAttempts.Add(1)
+		s.builder.metrics.FailureCount.Add(1)
+	}
+}
+
+// recordStopMetrics records metrics when auto-stopping (success or non-retryable error)
+func (s *iteratorState) recordStopMetrics() {
+	if s.builder.metrics == nil || !s.operationStarted {
+		return
+	}
+
+	s.builder.metrics.TotalAttempts.Add(1)
+
+	// Determine success vs failure based on last attempt result
+	if s.lastAttempt != nil && s.lastAttempt.resultSet {
+		if s.lastAttempt.result == nil {
+			s.builder.metrics.SuccessCount.Add(1)
+		} else {
+			s.builder.metrics.FailureCount.Add(1)
+		}
+	} else {
+		// No result set - assume failure
 		s.builder.metrics.FailureCount.Add(1)
 	}
 }

@@ -13,7 +13,7 @@
 **Go 1.23's native iterators** felt like a good fit for retrying operations. A lot of the existing libraries don't take advantage of this feature.
 
 ```go
-// Native iterator pattern with full control
+// iterator pattern with more control
 for attempt := range recur.Iter().
     WithMaxAttempts(3).
     WithBackoff(recur.Exponential(100*time.Millisecond)).
@@ -21,12 +21,8 @@ for attempt := range recur.Iter().
     Seq() {
     
     result, err := fetchData()
-    attempt.Result(err) // Tell iterator the result
-    
-    if err == nil {
-        break // Success!
-    }
-    // Iterator automatically stops if error shouldn't be retried
+    attempt.Result(err)
+    // Iterator automatically stops on success or non-retryable error
 }
 ```
 
@@ -46,9 +42,6 @@ go get github.com/amr8t/go-recur
 for attempt := range recur.Iter().WithMaxAttempts(3).Seq() {
     err := operation()
     attempt.Result(err)
-    if err == nil {
-        break
-    }
 }
 ```
 
@@ -62,9 +55,6 @@ for attempt := range recur.Iter().
     
     err := operation()
     attempt.Result(err)
-    if err == nil {
-        break
-    }
 }
 ```
 
@@ -78,9 +68,6 @@ builder := recur.Iter().
 for attempt := range builder.Seq() {
     err := db.Query()
     attempt.Result(err)
-    if err == nil {
-        break
-    }
 }
 
 // Check metrics
@@ -111,10 +98,8 @@ for attempt := range recur.Iter().
         break
     }
     
+    // Let iterator handle success/retry logic automatically
     attempt.Result(err)
-    if err == nil {
-        break
-    }
 }
 ```
 
@@ -154,9 +139,6 @@ for attempt := range recur.Iter().
     Seq() {
     err := operation()
     attempt.Result(err)
-    if err == nil {
-        break
-    }
 }
 ```
 
@@ -169,9 +151,6 @@ for attempt := range recur.Iter().
     Seq() {
     err := operation()
     attempt.Result(err)
-    if err == nil {
-        break
-    }
 }
 
 // Custom matcher
@@ -183,9 +162,6 @@ for attempt := range recur.Iter().
     Seq() {
     err := db.Query()
     attempt.Result(err)
-    if err == nil {
-        break
-    }
 }
 
 // Combinators
@@ -200,9 +176,6 @@ for attempt := range recur.Iter().
     Seq() {
     err := operation()
     attempt.Result(err)
-    if err == nil {
-        break
-    }
 }
 ```
 
@@ -238,9 +211,6 @@ func FetchUser(id int) (*User, error) {
         
         err = json.NewDecoder(resp.Body).Decode(&user)
         attempt.Result(err)
-        if err == nil {
-            break
-        }
     }
     
     if user == nil {
@@ -273,9 +243,6 @@ func QueryWithFallback(query string) ([]Row, error) {
         }
         
         attempt.Result(err)
-        if err == nil {
-            break
-        }
     }
     
     return rows, nil
@@ -348,7 +315,7 @@ type Attempt struct {
     Delay    time.Duration // Delay before this attempt
 }
 
-func (a *Attempt) Result(err error)            // Tell iterator the result (enables auto-stop)
+func (a *Attempt) Result(err error)            // Tell iterator the result; automatically stops on success/non-retryable error
 func (a *Attempt) ShouldRetry(err error) bool  // Check if error should be retried (optional if using Result)
 func (a *Attempt) Context() context.Context
 ```
