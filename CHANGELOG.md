@@ -5,61 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Added
-- Fluent builder API for retry configuration
-- Composable policies with `CombinePolicies`
-- Rich error matching with And/Or/Not combinators
-- Multiple backoff strategies: Constant, Exponential, Fibonacci, Linear, NoDelay
-- Context and timeout support
-- Retry hooks for monitoring and observability
-- Comprehensive test suite
-- Complete documentation and examples
-- CI/CD pipeline with GitHub Actions
-- Automated release workflow
-- **Error-specific handling with `.On()` method** - Different retry strategies for different errors
-- **Built-in metrics collection** - First-class observability with `MetricsCollector`
-- **Go 1.23 iterator support** - Native `for...range` pattern with `Iter().Seq()`
-- Error actions: `Stop()`, `Wait()`, `UseBackoff()` for conditional retry behavior
-- Advanced examples showcasing new features
-
-### Changed
-- Enhanced `SimpleRetrier` with error handler support
-- Added metrics tracking to retry execution
-- Improved struct field alignment for better memory efficiency
-- Fixed builtin identifier shadowing (renamed `max` parameters)
-
-### Deprecated
-- N/A
-
-### Removed
-- N/A
-
-### Fixed
-- Code formatting issues (gofmt compliance)
-- Struct field alignment for optimal memory layout
-- Builtin identifier shadowing warnings from golangci-lint
-
-### Security
-- N/A
-
 ## [0.1.0] - TBD
 
 ### Added
-- Initial release
-- Core retry engine with error handling
-- Fluent API with method chaining
-- Policy composition system
-- Error matchers (MatchAny, MatchErrors, MatchFunc)
-- Error matcher combinators (And, Or, Not)
-- Five backoff strategies
-- Context support with cancellation
-- Overall timeout configuration
-- OnRetry hooks for monitoring
-- Comprehensive examples (simple and HTTP)
-- Full API documentation
+- Iterator-native retry library for Go 1.23+
+- Native `for...range` pattern with `Iter().Seq()` using Go 1.23 iterators
+- Fluent builder API for retry configuration
+- Automatic retry control with `Attempt.Result(err)` method
+- Built-in metrics collection with `MetricsCollector` for observability
+- Five backoff strategies:
+  - Constant - Fixed delay between retries
+  - Exponential - Exponentially increasing delays
+  - Fibonacci - Delays following Fibonacci sequence
+  - Linear - Linearly increasing delays
+  - NoDelay - Immediate retry with no delay
+- Rich error matching system:
+  - `MatchAny` - Retry all errors
+  - `MatchErrors` - Match specific error values
+  - `MatchFunc` - Custom error matching logic
+  - Combinators: `And`, `Or`, `Not` for complex conditions
+- Context support with cancellation and timeout
+- Overall timeout configuration with `WithTimeout`
+- Manual retry control with `ShouldRetry()` method (optional)
+- Comprehensive test suite with >90% coverage
+- Complete documentation and examples:
+  - Basic retry patterns
+  - Backoff strategies
+  - Error-specific handling
+  - HTTP client examples
+  - Database with fallback
+  - Circuit breaker integration
+- CI/CD pipeline with GitHub Actions:
+  - Multi-version Go testing (1.23, 1.24)
+  - golangci-lint integration
+  - Code coverage reporting with codecov
+  - Example builds
 - MIT License
 
-[Unreleased]: https://github.com/amr8t/go-recur/compare/v0.1.0...HEAD
+### Notes
+- Requires Go 1.23 or later for iterator support
+- Iterator-first design for idiomatic Go 1.23+ usage
+- Automatic metrics tracking with minimal boilerplate
+- Explicit error handling over implicit callbacks
+
 [0.1.0]: https://github.com/amr8t/go-recur/releases/tag/v0.1.0

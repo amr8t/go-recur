@@ -129,109 +129,179 @@ func (b *IteratorBuilder) WithMetricsCollector(m *MetricsCollector) *IteratorBui
 // If metrics are enabled, they are automatically tracked
 func (b *IteratorBuilder) Seq() iter.Seq[*Attempt] {
 	return func(yield func(*Attempt) bool) {
-		ctx := b.ctx
-		var cancel context.CancelFunc
-
-		if b.timeout > 0 {
-			ctx, cancel = context.WithTimeout(ctx, b.timeout)
+		ctx, cancel := b.prepareContext()
+		if cancel != nil {
 			defer cancel()
 		}
 
-		var lastErr error
-		var lastAttempt *Attempt
-		startTime := time.Now()
-		operationStarted := false
+		state := &iteratorState{
+			ctx:         ctx,
+			builder:     b,
+			startTime:   time.Now(),
+			lastAttempt: nil,
+		}
 
 		for attempt := 1; attempt <= b.maxAttempts; attempt++ {
-			// Check if previous attempt had non-retryable error
-			if lastAttempt != nil && lastAttempt.resultSet {
-				if lastAttempt.result != nil && !b.matcher(lastAttempt.result) {
-					// Don't continue - previous error shouldn't be retried
-					if b.metrics != nil && operationStarted {
-						b.metrics.TotalAttempts.Add(1)
-						b.metrics.FailureCount.Add(1)
-					}
-					return
-				}
-			}
-			// Track retry metrics (not on first attempt)
-			if b.metrics != nil && attempt > 1 {
-				b.metrics.TotalRetries.Add(1)
-			}
-
-			// Check context cancellation
-			select {
-			case <-ctx.Done():
-				if b.metrics != nil && operationStarted {
-					b.metrics.TotalAttempts.Add(1)
-					b.metrics.FailureCount.Add(1)
-				}
+			if !state.checkContinue(attempt) {
 				return
-			default:
 			}
 
-			// Calculate delay for this attempt
-			var delay time.Duration
-			if attempt > 1 {
-				delay = b.backoff.Next(attempt - 1)
+			att := state.createAttempt(attempt)
+
+			if !state.waitForBackoff(att) {
+				return
 			}
 
-			// Create attempt
-			att := &Attempt{
-				Number:   attempt,
-				LastErr:  lastErr,
-				Delay:    delay,
-				ctx:      ctx,
-				matcher:  b.matcher,
-				maxRetry: b.maxAttempts,
-			}
+			state.operationStarted = true
+			state.lastAttempt = att
 
-			// Wait for backoff if not first attempt
-			if attempt > 1 && delay > 0 {
-				select {
-				case <-time.After(delay):
-				case <-ctx.Done():
-					if b.metrics != nil && operationStarted {
-						b.metrics.TotalAttempts.Add(1)
-						b.metrics.FailureCount.Add(1)
-					}
-					return
-				}
-			}
-
-			operationStarted = true
-			lastAttempt = att
-
-			// Yield the attempt
 			if !yield(att) {
-				// Iterator stopped - record final metrics
-				if b.metrics != nil {
-					duration := time.Since(startTime)
-					b.metrics.TotalAttempts.Add(1)
-					// Assume success if stopped with no error stored
-					if lastErr == nil {
-						b.metrics.SuccessCount.Add(1)
-					} else {
-						b.metrics.FailureCount.Add(1)
-					}
-					_ = duration // For future callback support
-				}
+				state.recordFinalMetrics()
 				return
 			}
-
-			// Store the last error for next iteration
-			// (will be set by user after they execute their operation)
 		}
 
-		// All attempts exhausted - record metrics
-		if b.metrics != nil && operationStarted {
-			b.metrics.TotalAttempts.Add(1)
-			if lastErr == nil {
-				b.metrics.SuccessCount.Add(1)
-			} else {
-				b.metrics.FailureCount.Add(1)
-			}
+		state.recordExhaustedMetrics()
+	}
+}
+
+// prepareContext sets up the context with timeout if configured
+func (b *IteratorBuilder) prepareContext() (context.Context, context.CancelFunc) {
+	if b.timeout > 0 {
+		return context.WithTimeout(b.ctx, b.timeout)
+	}
+	return b.ctx, nil
+}
+
+// iteratorState holds the state during iteration
+type iteratorState struct {
+	ctx              context.Context
+	builder          *IteratorBuilder
+	startTime        time.Time
+	lastAttempt      *Attempt
+	operationStarted bool
+}
+
+// checkContinue checks if iteration should continue
+func (s *iteratorState) checkContinue(attempt int) bool {
+	// Check if previous attempt had non-retryable error
+	if !s.shouldRetryLastAttempt() {
+		s.recordFailureMetrics()
+		return false
+	}
+
+	// Track retry metrics (not on first attempt)
+	if s.builder.metrics != nil && attempt > 1 {
+		s.builder.metrics.TotalRetries.Add(1)
+	}
+
+	// Check context cancellation
+	if s.isContextDone() {
+		s.recordFailureMetrics()
+		return false
+	}
+
+	return true
+}
+
+// shouldRetryLastAttempt checks if the last attempt's error should be retried
+func (s *iteratorState) shouldRetryLastAttempt() bool {
+	if s.lastAttempt == nil {
+		return true
+	}
+	if !s.lastAttempt.resultSet {
+		return true
+	}
+	if s.lastAttempt.result == nil {
+		return true
+	}
+	return s.builder.matcher(s.lastAttempt.result)
+}
+
+// isContextDone checks if context is cancelled
+func (s *iteratorState) isContextDone() bool {
+	select {
+	case <-s.ctx.Done():
+		return true
+	default:
+		return false
+	}
+}
+
+// createAttempt creates a new Attempt for the given attempt number
+func (s *iteratorState) createAttempt(attempt int) *Attempt {
+	var delay time.Duration
+	var lastErr error
+
+	if attempt > 1 {
+		delay = s.builder.backoff.Next(attempt - 1)
+		if s.lastAttempt != nil {
+			lastErr = s.lastAttempt.result
 		}
+	}
+
+	return &Attempt{
+		Number:   attempt,
+		LastErr:  lastErr,
+		Delay:    delay,
+		ctx:      s.ctx,
+		matcher:  s.builder.matcher,
+		maxRetry: s.builder.maxAttempts,
+	}
+}
+
+// waitForBackoff waits for the backoff delay or context cancellation
+func (s *iteratorState) waitForBackoff(att *Attempt) bool {
+	if att.Number <= 1 || att.Delay <= 0 {
+		return true
+	}
+
+	select {
+	case <-time.After(att.Delay):
+		return true
+	case <-s.ctx.Done():
+		s.recordFailureMetrics()
+		return false
+	}
+}
+
+// recordFailureMetrics records failure metrics if enabled
+func (s *iteratorState) recordFailureMetrics() {
+	if s.builder.metrics != nil && s.operationStarted {
+		s.builder.metrics.TotalAttempts.Add(1)
+		s.builder.metrics.FailureCount.Add(1)
+	}
+}
+
+// recordFinalMetrics records metrics when iterator is stopped by user
+func (s *iteratorState) recordFinalMetrics() {
+	if s.builder.metrics == nil {
+		return
+	}
+
+	s.builder.metrics.TotalAttempts.Add(1)
+
+	// Determine success based on last attempt result
+	if s.lastAttempt != nil && s.lastAttempt.resultSet && s.lastAttempt.result != nil {
+		s.builder.metrics.FailureCount.Add(1)
+	} else {
+		s.builder.metrics.SuccessCount.Add(1)
+	}
+}
+
+// recordExhaustedMetrics records metrics when all attempts are exhausted
+func (s *iteratorState) recordExhaustedMetrics() {
+	if s.builder.metrics == nil || !s.operationStarted {
+		return
+	}
+
+	s.builder.metrics.TotalAttempts.Add(1)
+
+	// Determine success based on last attempt result
+	if s.lastAttempt != nil && s.lastAttempt.resultSet && s.lastAttempt.result != nil {
+		s.builder.metrics.FailureCount.Add(1)
+	} else {
+		s.builder.metrics.SuccessCount.Add(1)
 	}
 }
 
