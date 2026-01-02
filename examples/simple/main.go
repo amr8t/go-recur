@@ -4,233 +4,184 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/amr8t/go-recur"
 )
 
 var (
-	ErrTemporary = errors.New("temporary error")
-	ErrFatal     = errors.New("fatal error")
+	ErrTemporary   = errors.New("temporary error")
+	ErrRateLimited = errors.New("rate limited")
+	ErrAuthFailed  = errors.New("authentication failed")
+	ErrNetwork     = errors.New("network error")
 )
 
 func main() {
-	fmt.Println("=== go-recur Simple Examples ===")
+	fmt.Println("=== go-recur Examples (Iterator-Only) ===\n")
 
-	example1_BasicRetry()
-	example2_WithReturnValue()
-	example3_WithArguments()
-	example4_MultipleReturns()
-	example5_Backoff()
-	example6_ConditionalRetry()
-	example7_WithHooks()
-	example8_RealWorld()
+	example1_BasicIterator()
+	example2_WithBackoff()
+	example3_WithMetrics()
+	example4_ErrorSpecificHandling()
+	example5_ContextAndTimeout()
 }
 
-// Example 1: Basic retry without return values
-func example1_BasicRetry() {
-	fmt.Println("--- Example 1: Basic Retry ---")
-
-	counter := 0
-	err := recur.Do(func() error {
-		counter++
-		fmt.Printf("Attempt %d\n", counter)
-		if counter < 3 {
-			return ErrTemporary
-		}
-		return nil
-	}).WithMaxAttempts(5).Run()
-
-	if err != nil {
-		log.Printf("Failed: %v\n", err)
-	} else {
-		fmt.Println("Success!")
-	}
-	fmt.Println()
-}
-
-// Example 2: With return value
-func example2_WithReturnValue() {
-	fmt.Println("--- Example 2: With Return Value ---")
+// Example 1: Basic iterator pattern
+func example1_BasicIterator() {
+	fmt.Println("--- Example 1: Basic Iterator Pattern ---")
 
 	counter := 0
 	var result string
 
-	err := recur.Do(func() error {
+	for attempt := range recur.Iter().WithMaxAttempts(4).Seq() {
 		counter++
-		if counter < 2 {
-			return ErrTemporary
-		}
-		result = "Hello, World!"
-		return nil
-	}).WithMaxAttempts(3).Run()
+		fmt.Printf("  Attempt %d\n", attempt.Number)
 
-	if err != nil {
-		log.Printf("Failed: %v\n", err)
-	} else {
-		fmt.Printf("Got result: %s\n", result)
-	}
-	fmt.Println()
-}
-
-// Example 3: With arguments captured in closure
-func example3_WithArguments() {
-	fmt.Println("--- Example 3: With Arguments ---")
-
-	userID := 42
-	userName := "Alice"
-	var greeting string
-
-	err := recur.Do(func() error {
-		greeting = fmt.Sprintf("Hello, %s (ID: %d)!", userName, userID)
-		return nil
-	}).WithMaxAttempts(3).Run()
-
-	if err != nil {
-		log.Printf("Failed: %v\n", err)
-	} else {
-		fmt.Printf("Greeting: %s\n", greeting)
-	}
-	fmt.Println()
-}
-
-// Example 4: Multiple return values
-func example4_MultipleReturns() {
-	fmt.Println("--- Example 4: Multiple Return Values ---")
-
-	var name string
-	var age int
-	var active bool
-
-	err := recur.Do(func() error {
-		// Simulate fetching user data
-		name = "Bob"
-		age = 30
-		active = true
-		return nil
-	}).WithMaxAttempts(3).Run()
-
-	if err != nil {
-		log.Printf("Failed: %v\n", err)
-	} else {
-		fmt.Printf("User: %s, Age: %d, Active: %v\n", name, age, active)
-	}
-	fmt.Println()
-}
-
-// Example 5: Different backoff strategies
-func example5_Backoff() {
-	fmt.Println("--- Example 5: Backoff Strategies ---")
-
-	fmt.Println("Exponential backoff:")
-	counter := 0
-	recur.Do(func() error {
-		counter++
-		fmt.Printf("Attempt %d\n", counter)
-		return ErrTemporary
-	}).
-		WithMaxAttempts(4).
-		WithBackoff(recur.Exponential(50 * time.Millisecond)).
-		Run()
-
-	fmt.Println("\nFibonacci backoff:")
-	counter = 0
-	recur.Do(func() error {
-		counter++
-		fmt.Printf("Attempt %d\n", counter)
-		return ErrTemporary
-	}).
-		WithMaxAttempts(4).
-		WithBackoff(recur.Fibonacci(30 * time.Millisecond)).
-		Run()
-
-	fmt.Println()
-}
-
-// Example 6: Conditional retry
-func example6_ConditionalRetry() {
-	fmt.Println("--- Example 6: Conditional Retry ---")
-
-	counter := 0
-	err := recur.Do(func() error {
-		counter++
-		if counter == 1 {
-			fmt.Println("Returning temporary error (will retry)")
-			return ErrTemporary
-		}
-		fmt.Println("Returning fatal error (won't retry)")
-		return ErrFatal
-	}).
-		WithMaxAttempts(5).
-		RetryIf(recur.MatchErrors(ErrTemporary)).
-		Run()
-
-	if err != nil {
-		log.Printf("Stopped on: %v\n", err)
-	}
-	fmt.Println()
-}
-
-// Example 7: With monitoring hooks
-func example7_WithHooks() {
-	fmt.Println("--- Example 7: With Monitoring Hooks ---")
-
-	counter := 0
-	err := recur.Do(func() error {
-		counter++
+		// Execute operation
+		var err error
 		if counter < 3 {
-			return ErrTemporary
+			err = ErrTemporary
 		}
-		return nil
-	}).
+
+		attempt.Result(err) // Tell iterator the result
+		if err == nil {
+			result = "success"
+			break
+		}
+		// Iterator automatically stops if error shouldn't be retried
+	}
+
+	fmt.Printf("✓ Success! Result: %s\n\n", result)
+}
+
+// Example 2: Iterator with exponential backoff
+func example2_WithBackoff() {
+	fmt.Println("--- Example 2: Exponential Backoff ---")
+
+	counter := 0
+	for attempt := range recur.Iter().
+		WithMaxAttempts(4).
+		WithBackoff(recur.Exponential(100 * time.Millisecond)).
+		Seq() {
+
+		counter++
+		fmt.Printf("  Attempt %d (delay: %v)\n", attempt.Number, attempt.Delay)
+
+		var err error
+		if counter < 3 {
+			err = ErrTemporary
+			fmt.Println("    → Temporary error, retrying...")
+		} else {
+			fmt.Println("    → Success!")
+		}
+
+		attempt.Result(err)
+		if err == nil {
+			break
+		}
+	}
+	fmt.Println()
+}
+
+// Example 3: Automated metrics
+func example3_WithMetrics() {
+	fmt.Println("--- Example 3: Automated Metrics ---")
+
+	builder := recur.Iter().
+		WithMaxAttempts(4).
+		WithBackoff(recur.Constant(50 * time.Millisecond)).
+		WithMetrics("api_operation")
+
+	counter := 0
+	for attempt := range builder.Seq() {
+		counter++
+		var err error
+		if counter < 3 {
+			err = ErrTemporary
+		}
+		attempt.Result(err)
+		if err == nil {
+			break
+		}
+	}
+
+	// Metrics are automatically tracked
+	metrics := builder.Metrics()
+	fmt.Printf("  Total Operations: %d\n", metrics.TotalAttempts.Load())
+	fmt.Printf("  Total Retries:    %d\n", metrics.TotalRetries.Load())
+	fmt.Printf("  Success Count:    %d\n", metrics.SuccessCount.Load())
+	fmt.Printf("  Success Rate:     %.0f%%\n",
+		float64(metrics.SuccessCount.Load())/float64(metrics.TotalAttempts.Load())*100)
+	fmt.Println()
+}
+
+// Example 4: Error-specific handling
+func example4_ErrorSpecificHandling() {
+	fmt.Println("--- Example 4: Error-Specific Handling ---")
+
+	counter := 0
+	for attempt := range recur.Iter().
 		WithMaxAttempts(5).
 		WithBackoff(recur.Constant(100 * time.Millisecond)).
-		OnRetry(func(ctx context.Context, attempt int, err error, elapsed time.Duration) {
-			log.Printf("[RETRY] Attempt %d failed after %v: %v", attempt, elapsed, err)
-		}).
-		Run()
+		Seq() {
 
-	if err != nil {
-		log.Printf("Final failure: %v\n", err)
-	} else {
-		fmt.Println("Success after retries!")
+		counter++
+		fmt.Printf("  Attempt %d: ", attempt.Number)
+
+		var err error
+		switch counter {
+		case 1:
+			err = ErrRateLimited
+			fmt.Println("Rate limited!")
+			attempt.Result(err)
+			// Custom handling: wait longer for rate limits
+			time.Sleep(1 * time.Second)
+			continue
+		case 2:
+			err = ErrNetwork
+			fmt.Println("Network error")
+			attempt.Result(err)
+			continue
+		case 3:
+			fmt.Println("Success!")
+			attempt.Result(nil)
+			break
+		}
 	}
 	fmt.Println()
 }
 
-// Example 8: Real-world API simulation
-func example8_RealWorld() {
-	fmt.Println("--- Example 8: Real-World API Call ---")
+// Example 5: Context and timeout
+func example5_ContextAndTimeout() {
+	fmt.Println("--- Example 5: Context and Timeout ---")
 
-	// Simulate API call with retry
-	userID := 123
-	var userData map[string]interface{}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 
-	err := recur.Do(func() error {
-		// Simulate API call
-		fmt.Printf("Calling API for user %d...\n", userID)
+	counter := 0
+	for attempt := range recur.Iter().
+		WithContext(ctx).
+		WithMaxAttempts(10).
+		WithBackoff(recur.Constant(500 * time.Millisecond)).
+		Seq() {
 
-		// Simulate success on first try
-		userData = map[string]interface{}{
-			"id":    userID,
-			"name":  "John Doe",
-			"email": "john@example.com",
+		counter++
+		fmt.Printf("  Attempt %d\n", counter)
+
+		select {
+		case <-attempt.Context().Done():
+			fmt.Println("  ✗ Context timeout")
+			return
+		default:
+			var err error
+			if counter < 5 {
+				err = ErrTemporary
+			}
+			attempt.Result(err)
+			if err == nil {
+				fmt.Println("  ✓ Success!")
+				return
+			}
 		}
-		return nil
-	}).
-		WithMaxAttempts(5).
-		WithBackoff(recur.Exponential(200 * time.Millisecond)).
-		WithTimeout(5 * time.Second).
-		OnRetry(func(ctx context.Context, attempt int, err error, elapsed time.Duration) {
-			log.Printf("API call failed, retrying: %v", err)
-		}).
-		Run()
-
-	if err != nil {
-		log.Printf("API call failed: %v\n", err)
-	} else {
-		fmt.Printf("Got user data: %v\n", userData)
 	}
-	fmt.Println()
 }

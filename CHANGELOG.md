@@ -18,9 +18,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Complete documentation and examples
 - CI/CD pipeline with GitHub Actions
 - Automated release workflow
+- **Error-specific handling with `.On()` method** - Different retry strategies for different errors
+- **Built-in metrics collection** - First-class observability with `MetricsCollector`
+- **Go 1.23 iterator support** - Native `for...range` pattern with `Iter().Seq()`
+- Error actions: `Stop()`, `Wait()`, `UseBackoff()` for conditional retry behavior
+- Advanced examples showcasing new features
 
 ### Changed
-- N/A
+- Enhanced `SimpleRetrier` with error handler support
+- Added metrics tracking to retry execution
+- Improved struct field alignment for better memory efficiency
+- Fixed builtin identifier shadowing (renamed `max` parameters)
 
 ### Deprecated
 - N/A
@@ -29,7 +37,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - N/A
 
 ### Fixed
-- N/A
+- Code formatting issues (gofmt compliance)
+- Struct field alignment for optimal memory layout
+- Builtin identifier shadowing warnings from golangci-lint
 
 ### Security
 - N/A
